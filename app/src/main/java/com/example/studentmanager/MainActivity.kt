@@ -1,53 +1,100 @@
 package com.example.studentmanager
 
+import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
-import android.widget.Button
-import android.widget.EditText
-import android.widget.Toast
+import android.widget.ImageButton
+import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.Toolbar
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var editTextName: EditText
-    private lateinit var editTextMSSV: EditText
-    private lateinit var buttonAdd: Button
     private lateinit var recyclerView: RecyclerView
     private lateinit var studentAdapter: StudentAdapter
-
+    private lateinit var emptyView: TextView
     private val studentList = mutableListOf<Student>()
+
+    companion object {
+        const val REQUEST_ADD = 1
+        const val REQUEST_UPDATE = 2
+        const val EXTRA_STUDENT = "extra_student"
+        const val EXTRA_POSITION = "extra_position"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        editTextName = findViewById(R.id.editTextName)
-        editTextMSSV = findViewById(R.id.editTextMSSV)
-        buttonAdd = findViewById(R.id.buttonAdd)
+        val toolbar: Toolbar = findViewById(R.id.toolbar)
+        setSupportActionBar(toolbar)
+        supportActionBar?.title = "Student Manager"
+
+        val buttonAdd: ImageButton = findViewById(R.id.buttonAdd)
+        buttonAdd.setOnClickListener {
+            val intent = Intent(this, AddStudentActivity::class.java)
+            startActivityForResult(intent, REQUEST_ADD)
+        }
+
         recyclerView = findViewById(R.id.recyclerView)
+        emptyView = findViewById(R.id.emptyView)
 
         recyclerView.layoutManager = LinearLayoutManager(this)
-        studentAdapter = StudentAdapter(studentList) { position ->
-            removeStudentAt(position)
-        }
+        studentAdapter = StudentAdapter(studentList,
+            onDeleteClickListener = { position ->
+                confirmDelete(position)
+            },
+            onUpdateClickListener = { student, position ->
+                val intent = Intent(this, AddStudentActivity::class.java)
+                intent.putExtra(EXTRA_STUDENT, student)
+                intent.putExtra(EXTRA_POSITION, position)
+                startActivityForResult(intent, REQUEST_UPDATE)
+            })
         recyclerView.adapter = studentAdapter
 
-        buttonAdd.setOnClickListener {
-            val name = editTextName.text.toString().trim()
-            val mssv = editTextMSSV.text.toString().trim()
+        // Thêm dữ liệu mẫu
+        studentList.add(Student("Nguyen Van A", "12345", 0, "test@example.com", "0123456789"))
+        studentAdapter.notifyDataSetChanged()
+        updateEmptyView()
+    }
 
-            if (name.isEmpty() || mssv.isEmpty()) {
-                Toast.makeText(this, "Vui lòng nhập đầy đủ thông tin.", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (resultCode == Activity.RESULT_OK && data != null) {
+            val student = data.getSerializableExtra(EXTRA_STUDENT) as? Student ?: return
+            when (requestCode) {
+                REQUEST_ADD -> {
+                    studentAdapter.addStudent(student)
+                }
+                REQUEST_UPDATE -> {
+                    val position = data.getIntExtra(EXTRA_POSITION, -1)
+                    if (position != -1) {
+                        studentAdapter.updateStudent(student, position)
+                    }
+                }
             }
-            studentAdapter.addStudent(Student(name, mssv))
-            editTextName.text.clear()
-            editTextMSSV.text.clear()
+            updateEmptyView()
         }
     }
 
-    private fun removeStudentAt(position: Int) {
-        studentAdapter.removeStudent(position)
+    private fun confirmDelete(position: Int) {
+        AlertDialog.Builder(this)
+            .setTitle("Xác nhận")
+            .setMessage("Bạn có chắc muốn xóa sinh viên này không?")
+            .setPositiveButton("Xóa") { _, _ ->
+                studentAdapter.removeStudent(position)
+                updateEmptyView()
+            }
+            .setNegativeButton("Hủy", null)
+            .show()
+    }
+
+    private fun updateEmptyView() {
+        emptyView.visibility = if (studentList.isEmpty()) android.view.View.VISIBLE else android.view.View.GONE
+        recyclerView.visibility = if (studentList.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
     }
 }
