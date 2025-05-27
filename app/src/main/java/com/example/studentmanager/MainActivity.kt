@@ -3,6 +3,7 @@ package com.example.studentmanager
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.widget.ImageButton
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
@@ -16,6 +17,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var recyclerView: RecyclerView
     private lateinit var studentAdapter: StudentAdapter
     private lateinit var emptyView: TextView
+    private lateinit var dbHelper: StudentDatabase
     private val studentList = mutableListOf<Student>()
 
     companion object {
@@ -42,6 +44,11 @@ class MainActivity : AppCompatActivity() {
         recyclerView = findViewById(R.id.recyclerView)
         emptyView = findViewById(R.id.emptyView)
 
+        dbHelper = StudentDatabase(this)
+        val path = dbHelper.readableDatabase.path
+        Log.d("DB_PATH", "Database path: $path")
+        studentList.addAll(dbHelper.getAllStudents())
+
         recyclerView.layoutManager = LinearLayoutManager(this)
         studentAdapter = StudentAdapter(studentList,
             onDeleteClickListener = { position ->
@@ -56,8 +63,8 @@ class MainActivity : AppCompatActivity() {
         recyclerView.adapter = studentAdapter
 
         // Thêm dữ liệu mẫu
-        studentList.add(Student("Nguyen Van A", "12345", 0, "test@example.com", "0123456789"))
-        studentAdapter.notifyDataSetChanged()
+        //studentList.add(Student("Nguyen Van A", "12345", 0, "test@example.com", "0123456789"))
+        //studentAdapter.notifyDataSetChanged()
         updateEmptyView()
     }
 
@@ -69,10 +76,13 @@ class MainActivity : AppCompatActivity() {
             when (requestCode) {
                 REQUEST_ADD -> {
                     studentAdapter.addStudent(student)
+                    dbHelper.insertStudent(student)
                 }
                 REQUEST_UPDATE -> {
                     val position = data.getIntExtra(EXTRA_POSITION, -1)
                     if (position != -1) {
+                        val oldStudent = studentList[position]
+                        dbHelper.updateStudent(student, oldStudent.mssv)
                         studentAdapter.updateStudent(student, position)
                     }
                 }
@@ -86,6 +96,8 @@ class MainActivity : AppCompatActivity() {
             .setTitle("Xác nhận")
             .setMessage("Bạn có chắc muốn xóa sinh viên này không?")
             .setPositiveButton("Xóa") { _, _ ->
+                val student = studentList[position]
+                dbHelper.deleteStudent(student.mssv)
                 studentAdapter.removeStudent(position)
                 updateEmptyView()
             }
