@@ -9,15 +9,19 @@ import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var recyclerView: RecyclerView
     private lateinit var studentAdapter: StudentAdapter
     private lateinit var emptyView: TextView
-    private lateinit var dbHelper: StudentDatabase
+    //private lateinit var dbHelper: StudentDatabase
+    private lateinit var db: AppDatabase
+    private lateinit var studentDao: StudentDao
     private val studentList = mutableListOf<Student>()
 
     companion object {
@@ -30,6 +34,10 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        // Khoi tao Room db
+        db = AppDatabase.getDatabase(this)
+        studentDao = db.studentDao()
 
         val toolbar: Toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
@@ -44,10 +52,10 @@ class MainActivity : AppCompatActivity() {
         recyclerView = findViewById(R.id.recyclerView)
         emptyView = findViewById(R.id.emptyView)
 
-        dbHelper = StudentDatabase(this)
+        /*dbHelper = StudentDatabase(this)
         val path = dbHelper.readableDatabase.path
         Log.d("DB_PATH", "Database path: $path")
-        studentList.addAll(dbHelper.getAllStudents())
+        studentList.addAll(dbHelper.getAllStudents())*/
 
         recyclerView.layoutManager = LinearLayoutManager(this)
         studentAdapter = StudentAdapter(studentList,
@@ -65,7 +73,21 @@ class MainActivity : AppCompatActivity() {
         // Thêm dữ liệu mẫu
         //studentList.add(Student("Nguyen Van A", "12345", 0, "test@example.com", "0123456789"))
         //studentAdapter.notifyDataSetChanged()
-        updateEmptyView()
+        //updateEmptyView()
+        loadStudents()
+    }
+    private fun loadStudents() {
+        lifecycleScope.launch {
+            try {
+                val students = studentDao.getAll()
+                studentList.clear()
+                studentList.addAll(students)
+                studentAdapter.notifyDataSetChanged()
+                updateEmptyView()
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Error loading students", e)
+            }
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -73,7 +95,7 @@ class MainActivity : AppCompatActivity() {
 
         if (resultCode == Activity.RESULT_OK && data != null) {
             val student = data.getSerializableExtra(EXTRA_STUDENT) as? Student ?: return
-            when (requestCode) {
+            /*when (requestCode) {
                 REQUEST_ADD -> {
                     studentAdapter.addStudent(student)
                     dbHelper.insertStudent(student)
@@ -87,19 +109,48 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-            updateEmptyView()
+            updateEmptyView()*/
+            lifecycleScope.launch {
+                try {
+                    when (requestCode) {
+                        REQUEST_ADD -> {
+                            studentDao.insert(student)
+                            loadStudents()
+                        }
+                        REQUEST_UPDATE -> {
+                            val position = data.getIntExtra(EXTRA_POSITION, -1)
+                            if (position != -1) {
+                                studentDao.update(student)
+                                loadStudents()
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("MainActivity", "Database operation failed", e)
+                }
+            }
         }
     }
+
 
     private fun confirmDelete(position: Int) {
         AlertDialog.Builder(this)
             .setTitle("Xác nhận")
             .setMessage("Bạn có chắc muốn xóa sinh viên này không?")
             .setPositiveButton("Xóa") { _, _ ->
-                val student = studentList[position]
-                dbHelper.deleteStudent(student.mssv)
-                studentAdapter.removeStudent(position)
-                updateEmptyView()
+                //val student = studentList[position]
+                //dbHelper.deleteStudent(student.mssv)
+                //studentAdapter.removeStudent(position)
+                //updateEmptyView()
+                lifecycleScope.launch {
+                    try {
+                        val student = studentList[position]
+                        studentDao.delete(student)
+                        loadStudents()
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "Error deleting student", e)
+                    }
+                }
             }
             .setNegativeButton("Hủy", null)
             .show()
